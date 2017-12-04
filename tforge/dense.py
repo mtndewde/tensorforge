@@ -101,3 +101,66 @@ class DenseNetwork(StackedUnits):
         return cls([DenseLayer.from_dictionary(data_dict[n]) for n in ordered_keys])
 
 pass
+
+
+class DenseClassifier(Unit):
+
+    def __init__(self, network, classifier):
+        self._network = network
+        self._classifier = classifier
+
+    @property
+    def network(self):
+        return self._network
+
+    @property
+    def classifier(self):
+        return self._classifier
+
+    @property
+    def input_dim(self):
+        return self.network.input_dim
+
+    @property
+    def n_classes(self):
+        return self.classifier.output_dim
+
+    @property
+    def variables(self):
+        return self.network.variables + self.classifier.variables
+
+    @classmethod
+    def from_description(cls, n_in, n_classes, n_hids, acts, scope=None):
+        with tf.variable_scope(scope, default_name="dense_classifier"):
+            network = DenseNetwork.from_description(n_in, n_hids, acts)
+            classifier = DenseLayer.from_description(n_hids[-1] if n_hids else n_in, n_classes, None)
+        return cls(network, classifier)
+
+    def process(self, inputs, return_logits=False, scope=None):
+        with tf.variable_scope(scope, "dense_classifier_output"):
+            latent = self.network.process(inputs)
+            logits = self.classifier.process(latent)
+            outputs = logits if not return_logits else tf.nn.softmax(logits)
+        return outputs
+
+    def predict(self, inputs, scope=None):
+        with tf.variable_scope(scope, default_name="dense_classifier_prediction"):
+            logits = self.process(inputs)
+            predictions = tf.cast(tf.argmax(logits, axis=-1), tf.int32)
+        return predictions
+
+    def to_dictionary(self, session):
+        return {
+            "network": self.network.to_dictionary(session),
+            "classifier": self.classifier.to_dictionary(session)
+        }
+
+    @classmethod
+    def from_dictionary(cls, data_dict, scope=None):
+        with tf.variable_scope(scope, default_name="dense_classifier"):
+            network = DenseNetwork.from_dictionary(data_dict["network"])
+            classifier = DenseLayer.from_dictionary(data_dict["classifier"])
+        return cls(network, classifier)
+
+
+pass
