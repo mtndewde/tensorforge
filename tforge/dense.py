@@ -136,11 +136,11 @@ class DenseClassifier(Unit):
             classifier = DenseLayer.from_description(n_hids[-1] if n_hids else n_in, n_classes, None)
         return cls(network, classifier)
 
-    def process(self, inputs, return_logits=False, scope=None):
+    def process(self, inputs, return_logits=True, scope=None):
         with tf.variable_scope(scope, "dense_classifier_output"):
             latent = self.network.process(inputs)
             logits = self.classifier.process(latent)
-            outputs = logits if not return_logits else tf.nn.softmax(logits)
+            outputs = logits if return_logits else tf.nn.softmax(logits)
         return outputs
 
     def predict(self, inputs, scope=None):
