@@ -103,7 +103,7 @@ class StatefulUnit(Unit):
         return self._reset_state
 
     def process(self, inputs, stateful=True, scope=None):
-        with tf.variable_scope(scope, default_name="rnn_output"):
+        with tf.variable_scope(scope, default_name="statefulunit_output"):
             outputs, state = tf.nn.dynamic_rnn(self.cell, inputs, initial_state=self.state, scope=scope)
             if stateful:
                 with tf.control_dependencies([tf.assign(os, ns) for os, ns in zip(self.state, state)]):

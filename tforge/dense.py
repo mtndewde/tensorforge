@@ -81,7 +81,7 @@ class DenseLayer(Unit):
 pass
 
 
-class DenseStackedLayers(StackedUnits):
+class DenseNetwork(StackedUnits):
 
     @classmethod
     def from_description(cls, n_in, n_hids, acts, scope=None):
