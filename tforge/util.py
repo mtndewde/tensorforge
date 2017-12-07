@@ -5,6 +5,7 @@ import tensorflow as tf
 class Reshaper(Unit):
 
     def __init__(self, target_shape, name=None):
+        super().__init__()
         self._target_shape = target_shape
         self._output_dim = self._target_shape[-1]
 
@@ -16,7 +17,6 @@ class Reshaper(Unit):
         with tf.variable_scope(scope, default_name="reshape"):
             output = tf.reshape(inputs, shape=self._target_shape)
         return output
-
 
 pass
 
@@ -35,6 +35,5 @@ class BatchFlattener(Reshaper):
     @property
     def inverse(self):
         return self._inverse
-
 
 pass

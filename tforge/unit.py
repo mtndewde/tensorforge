@@ -4,19 +4,47 @@ import h5py
 
 class Unit(object):
 
+    def __init__(self):
+        self._variables = []
+        self._parameters = []
+        self._subunits = []
+        self._initializers = []
+
+    def register_variable(self, variable, register_initializer=True):
+        self._variables.append(variable)
+        if register_initializer:
+            self._initializers.append(variable.initializer)
+
+    def register_parameter(self, parameter, register_initializer=True):
+        self.register_variable(parameter, register_initializer)
+        self._parameters.append(parameter)
+
+    def register_subunit(self, subunit):
+        self._subunits.append(subunit)
+        self._initializers += subunit.initializers
+        self._variables += subunit.variables
+        self._parameters += subunit.parameters
+
+    def register_initializer(self, initializer):
+        self._initializers.append(initializer)
+
+    @property
+    def variables(self):
+        return self._variables
+
+    @property
+    def parameters(self):
+        return self._parameters
+
+    @property
+    def initializers(self):
+        return self._initializers
+
     def process(self, *args, **kwargs):
         raise NotImplementedError("process is abstract")
 
     def __call__(self, *args, **kwargs):
         return self.process(*args, **kwargs)
-
-    @property
-    def variables(self):
-        return []
-
-    @property
-    def initializers(self):
-        return [v.initializer for v in self.variables]
 
     def to_dictionary(self, session):
         raise NotImplementedError("to_dictionary is abstract")
@@ -60,11 +88,10 @@ pass
 class StackedUnits(Unit):
 
     def __init__(self, units):
+        super().__init__()
         self._stacked_units = units
-
-    @property
-    def variables(self):
-        return [v for u in self._stacked_units for v in u.variables]
+        for u in units:
+            self.register_subunit(u)
 
     @property
     def units(self):
@@ -82,8 +109,12 @@ pass
 class StatefulUnit(Unit):
 
     def __init__(self, cell, state_tuple):
+        super().__init__()
         self._cell = cell
         self._state = state_tuple
+        self.register_subunit(cell)
+        for state in state_tuple:
+            self.register_variable(state)
         self._reset_state = [tf.assign(s, tf.zeros(s.get_shape())) for s in self.state]
 
     @property
@@ -94,9 +125,6 @@ class StatefulUnit(Unit):
     def cell(self):
         return self._cell
 
-    @property
-    def variables(self):
-        return self.cell.variables + list(self.state)
 
     @property
     def reset_state(self):

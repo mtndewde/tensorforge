@@ -85,7 +85,7 @@ if __name__ == "__main__":
         valid_preds = model.predict(valid_imgs)
         # training
         train_loss = loss(train_logits, train_lbls)
-        train_step = tf.train.AdamOptimizer(args.learning_rate).minimize(train_loss, var_list=model.variables)
+        train_step = tf.train.AdamOptimizer(args.learning_rate).minimize(train_loss, var_list=model.parameters)
         # validation
         valid_loss = loss(valid_logits, valid_lbls)
         valid_acc = tf.reduce_mean(tf.cast(tf.equal(valid_preds, valid_lbls), tf.float32))

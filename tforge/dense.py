@@ -5,10 +5,12 @@ import tensorflow as tf
 class DenseLayer(Unit):
 
     def __init__(self, weights, bias, act):
+        super().__init__()
         self._weights = weights
         self._bias = bias
         self._act = act
-        self._variables = [self._weights, self._bias]
+        self.register_parameter(weights)
+        self.register_parameter(bias)
         self._input_dim, self._output_dim = weights.get_shape().as_list()
 
     @property
@@ -18,10 +20,6 @@ class DenseLayer(Unit):
     @property
     def bias(self):
         return self._bias
-
-    @property
-    def variables(self):
-        return self._variables
 
     @property
     def activation(self):
@@ -106,8 +104,11 @@ pass
 class DenseClassifier(Unit):
 
     def __init__(self, network, classifier):
+        super().__init__()
         self._network = network
         self._classifier = classifier
+        self.register_subunit(network)
+        self.register_subunit(classifier)
 
     @property
     def network(self):
@@ -124,10 +125,6 @@ class DenseClassifier(Unit):
     @property
     def n_classes(self):
         return self.classifier.output_dim
-
-    @property
-    def variables(self):
-        return self.network.variables + self.classifier.variables
 
     @classmethod
     def from_description(cls, n_in, n_classes, n_hids, acts, scope=None):

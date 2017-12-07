@@ -6,7 +6,9 @@ import tensorflow as tf
 class BasicRNNCell(Unit, tf.contrib.rnn.RNNCell):
 
     def __init__(self, recurrent_layer):
+        super().__init__()
         self._recurrent_layer = recurrent_layer
+        self.register_subunit(recurrent_layer)
         self._state_size = self._recurrent_layer.output_dim
 
     @property
@@ -18,10 +20,6 @@ class BasicRNNCell(Unit, tf.contrib.rnn.RNNCell):
         with tf.variable_scope(scope, default_name="basic_rnn"):
             recurrent_layer = DenseLayer.from_description(n_in+n_hid, n_hid, act, scope)
         return cls(recurrent_layer)
-
-    @property
-    def variables(self):
-        return self.recurrent_layer.variables
 
     @property
     def state_size(self):
@@ -92,11 +90,17 @@ pass
 class LSTMCell(Unit, tf.contrib.rnn.RNNCell):
 
     def __init__(self, forget_gate, input_gate, input_extractor, output_gate, output_extractor):
+        super().__init__()
         self._forget_gate = forget_gate
         self._input_gate = input_gate
         self._input_extractor = input_extractor
         self._output_gate = output_gate
         self._output_extractor = output_extractor
+        self.register_subunit(forget_gate)
+        self.register_subunit(input_gate)
+        self.register_subunit(input_extractor)
+        self.register_subunit(output_gate)
+        self.register_subunit(output_extractor)
         self._state_size = output_extractor.output_dim, input_extractor.output_dim
 
     @classmethod
@@ -108,11 +112,6 @@ class LSTMCell(Unit, tf.contrib.rnn.RNNCell):
             output_gate = DenseLayer.from_description(n_in + n_hid, n_hid, tf.sigmoid, "output_gate")
             output_extractor = DenseLayer.from_description(n_cell, n_hid, tf.tanh, "output_extractor")
         return cls(forget_gate, input_gate, input_extractor, output_gate, output_extractor)
-
-    @property
-    def variables(self):
-        return self.forget_gate.variables + self.input_gate.variables + self.input_extractor.variables + \
-               self.output_gate.variables + self.output_extractor.variables
 
     @property
     def state_size(self):
@@ -221,6 +220,5 @@ class LSTM(StatefulUnit):
             )
             lstm = cls(cell, hid_state, cell_state)
         return lstm
-
 
 pass
