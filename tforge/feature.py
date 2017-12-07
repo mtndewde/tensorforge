@@ -1,6 +1,7 @@
 from .unit import *
 import tensorflow as tf
 from math import sqrt
+import numpy as np
 
 
 class StringHashProducer(Unit):
@@ -139,7 +140,8 @@ class EmbeddingLayer(Unit):
         with tf.variable_scope(scope, default_name="embedding_layer_outputs"):
             batch = len(inputs.shape) > 1
             if batch:
-                output_shape = list(inputs.shape) + [self.output_dim]
+                outputs_shape = inputs.get_shape().as_list() + [self.output_dim.value]
+                outputs_shape = [s if s is not None else -1 for s in outputs_shape]
                 inputs = tf.reshape(inputs, [-1])
             adj_indeces = tf.map_fn(
                 lambda i: tf.cond(
@@ -153,7 +155,7 @@ class EmbeddingLayer(Unit):
             adj_embeddings = tf.concat([self.embeddings, unk_embedding], axis=0)
             outputs = tf.gather(adj_embeddings, adj_indeces, axis=0)
             if batch:
-                outputs = tf.reshape(outputs, output_shape)
+                outputs = tf.reshape(outputs, outputs_shape)
         return outputs
 
     def to_dictionary(self, session):
@@ -218,13 +220,14 @@ class TextEmbeddingLayer(Unit):
         with tf.variable_scope(scope, default_name="text_embedding_layer_output"):
             batch = len(inputs.shape) > 1
             if batch:
-                output_shape = list(inputs.shape) + [self.embedding_layer.output_dim]
+                outputs_shape = inputs.get_shape().as_list() + [self.output_dim.value]
+                outputs_shape = [s if s is not None else -1 for s in outputs_shape]
                 inputs = tf.reshape(inputs, [-1])
             hashes = self.string_hash_producer.process(inputs)
             indeces = self.index_map.process(hashes)
             outputs = self.embedding_layer.process(indeces)
             if batch:
-                outputs = tf.reshape(outputs, output_shape)
+                outputs = tf.reshape(outputs, outputs_shape)
         return outputs
 
     def to_dictionary(self, session):
