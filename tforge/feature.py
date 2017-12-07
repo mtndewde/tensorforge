@@ -97,10 +97,15 @@ class EmbeddingLayer(Unit):
             self.register_parameter(embeddings)
         else:
             self.register_variable(embeddings)
+        self._output_dim = self._embeddings.shape[-1]
 
     @property
     def embeddings(self):
         return self._embeddings
+
+    @property
+    def output_dim(self):
+        return self._output_dim
 
     @property
     def trainable(self):
@@ -132,6 +137,10 @@ class EmbeddingLayer(Unit):
 
     def process(self, inputs, scope=None):
         with tf.variable_scope(scope, default_name="embedding_layer_outputs"):
+            batch = len(inputs.shape) > 1
+            if batch:
+                output_shape = list(inputs.shape) + [self.output_dim]
+                inputs = tf.reshape(inputs, [-1])
             adj_indeces = tf.map_fn(
                 lambda i: tf.cond(
                     pred=tf.equal(i, -1),
@@ -143,6 +152,8 @@ class EmbeddingLayer(Unit):
             unk_embedding = tf.zeros([1, tf.shape(self.embeddings)[1]], dtype=tf.float32)
             adj_embeddings = tf.concat([self.embeddings, unk_embedding], axis=0)
             outputs = tf.gather(adj_embeddings, adj_indeces, axis=0)
+            if batch:
+                outputs = tf.reshape(outputs, output_shape)
         return outputs
 
     def to_dictionary(self, session):
@@ -205,9 +216,15 @@ class TextEmbeddingLayer(Unit):
 
     def process(self, inputs, scope=None):
         with tf.variable_scope(scope, default_name="text_embedding_layer_output"):
+            batch = len(inputs.shape) > 1
+            if batch:
+                output_shape = list(inputs.shape) + [self.embedding_layer.output_dim]
+                inputs = tf.reshape(inputs, [-1])
             hashes = self.string_hash_producer.process(inputs)
             indeces = self.index_map.process(hashes)
             outputs = self.embedding_layer.process(indeces)
+            if batch:
+                outputs = tf.reshape(outputs, output_shape)
         return outputs
 
     def to_dictionary(self, session):

@@ -16,7 +16,7 @@ class GloveEmbeddingLayer(TextEmbeddingLayer):
                 "glove_embeddings",
                 initializer=tf.stack(csv_columns[1:], axis=1),
                 validate_shape=False,
-                trainable=False
+                trainable=trainable
             )
         return cls.from_embeddings(glove_vocabulary, glove_embeddings, trainable, scope)
 
