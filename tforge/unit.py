@@ -103,40 +103,56 @@ class StackedUnits(Unit):
             outputs = unit.process(outputs)
         return outputs
 
+    
+
 pass
 
 
-class StatefulUnit(Unit):
+class RecurrentUnit(Unit):
 
-    def __init__(self, cell, state_tuple):
+    def __init__(self, cell):
         super().__init__()
         self._cell = cell
-        self._state = state_tuple
         self.register_subunit(cell)
-        for state in state_tuple:
-            self.register_variable(state)
-        self._reset_state = [tf.assign(s, tf.zeros(s.get_shape())) for s in self.state]
-
-    @property
-    def state(self):
-        return self._state
 
     @property
     def cell(self):
         return self._cell
 
+    def process(self, inputs, initial_state=None, state=None, include_state=False, scope=None):
+        with tf.variable_scope(scope, default_name="rnn_output"):
+            outputs, state = tf.nn.dynamic_rnn(self.cell, inputs, initial_state=initial_state, scope=scope)
+        return (outputs if not include_state else (outputs, state))
+
+pass
+
+
+class StatefulUnit(RecurrentUnit):
+
+    def __init__(self, cell, state_tuple=()):
+        super().__init__(cell)
+        self._state = state_tuple
+        for state in [s for s in state_tuple if s is not None]:
+            self.register_variable(state)
 
     @property
-    def reset_state(self):
-        return self._reset_state
+    def state(self):
+        return self._state
 
-    def process(self, inputs, stateful=True, scope=None):
-        with tf.variable_scope(scope, default_name="statefulunit_output"):
-            outputs, state = tf.nn.dynamic_rnn(self.cell, inputs, initial_state=self.state, scope=scope)
-            if stateful:
-                with tf.control_dependencies([tf.assign(os, ns) for os, ns in zip(self.state, state)]):
+    def reset_state(self, scope=None):
+        with tf.variable_scope(scope, default_name="statefulunit_reset"):
+            reset =[tf.assign(s, tf.zeros(s.get_shape())) for s in self.state if s is not None]
+        return reset
+
+    def process(self, inputs, save_state=True, include_state=False, scope=None):
+        with tf.variable_scope(scope, default_name="statefulunit_output") as scope:
+            initial_state = tuple([s if s is not None else tf.zeros([tf.shape(inputs)[0], d], tf.float32)
+                             for s, d in zip(list(self.state), list(self.cell.state_size))])
+            outputs, state = super().process(inputs, initial_state=initial_state, include_state=True, scope=scope)
+            if save_state:
+                with tf.control_dependencies([tf.assign(s, ns) for s, ns in zip(self.state, state) if s is not None]):
                     outputs = tf.identity(outputs)
-        return outputs
+        return (outputs if not include_state else (outputs, state))
 
 pass
 

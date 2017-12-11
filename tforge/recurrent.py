@@ -23,7 +23,7 @@ class BasicRNNCell(Unit, tf.contrib.rnn.RNNCell):
 
     @property
     def state_size(self):
-        return self.recurrent_layer.output_dim
+        return (self.recurrent_layer.output_dim,)
 
     @property
     def output_size(self):
@@ -48,19 +48,19 @@ pass
 
 class BasicRNN(StatefulUnit):
 
-    def __init__(self, cell, hid_state):
+    def __init__(self, cell, hid_state=None):
         super().__init__(cell, (hid_state,))
 
     @classmethod
-    def from_cell(cls, cell, batch_size, scope=None):
+    def from_cell(cls, cell, n_states=None, scope=None):
         with tf.variable_scope(scope, default_name="basic_rnn"):
             hid_state = tf.get_variable(
                 "hidden_state",
-                shape=[batch_size, cell.state_size],
+                shape=[n_states, cell.state_size[0]],
                 dtype=tf.float32,
                 initializer=tf.zeros_initializer(),
                 trainable=False
-            )
+            ) if n_states is not None else None
         return cls(cell, hid_state)
 
     @property
@@ -68,19 +68,22 @@ class BasicRNN(StatefulUnit):
         return self.state[0]
 
     def to_dictionary(self, session):
-        return {"cell": self.cell.to_dictionary(session), "hiddenstate": session.run(self.hidden_state)}
+        return {
+            "cell": self.cell.to_dictionary(session),
+            "hiddenstate": session.run(self.hidden_state) if self.hidden_state is not None else "none"
+        }
 
     @classmethod
     def from_dictionary(cls, data_dict, scope=None):
         with tf.variable_scope(scope, default_name="basic_rnn"):
-            cell = BasicRNNCell(BasicRNNCell.from_dictionary(data_dict["cell"]))
+            cell = BasicRNNCell.from_dictionary(data_dict["cell"])
             hid_state = tf.get_variable(
                 "hidden_state",
-                shape=data_dict["hiddenstate"],
+                shape=data_dict["hiddenstate"].shape,
                 dtype=tf.float32,
                 initializer=tf.constant_initializer(data_dict["hiddenstate"]),
                 trainable=False
-            )
+            ) if not isinstance(data_dict["hiddenstate"], str) else None
         return cls(cell, hid_state)
 
 
@@ -179,12 +182,22 @@ class LSTM(StatefulUnit):
         super().__init__(cell, (hid_state, cell_state))
 
     @classmethod
-    def from_cell(cls, cell, batch_size, scope=None):
+    def from_cell(cls, cell, n_states=None, scope=None):
         with tf.variable_scope(scope, default_name="lstm"):
             n_hid, n_cell = cell.state_size
             init = tf.zeros_initializer()
-            hid_state = tf.get_variable("hidden_state", [batch_size, n_hid], initializer=init, trainable=False)
-            cell_state = tf.get_variable("cell_state", [batch_size, n_cell], initializer=init, trainable=False)
+            hid_state = tf.get_variable(
+                "hidden_state",
+                shape = [n_states, n_hid],
+                initializer = init,
+                trainable = False
+            ) if n_states is not None else None
+            cell_state = tf.get_variable(
+                "cell_state",
+                shape = [n_states, n_cell],
+                initializer = init,
+                trainable = False
+            ) if n_states is not None else None
         return cls(cell, hid_state, cell_state)
 
     @property
@@ -198,8 +211,8 @@ class LSTM(StatefulUnit):
     def to_dictionary(self, session):
         return {
             "cell": self.cell.to_dictionary(session),
-            "hiddenstate": session.run(self.hidden_state),
-            "cellstate": session.run(self.cell_state)
+            "hiddenstate": session.run(self.hidden_state) if self.hidden_state is not None else "none",
+            "cellstate": session.run(self.cell_state) if self.cell_state is not None else "none"
         }
 
     @classmethod
@@ -211,14 +224,58 @@ class LSTM(StatefulUnit):
                 shape=data_dict["hiddenstate"].shape,
                 initializer=tf.constant_initializer(data_dict["hiddenstate"]),
                 trainable=False
-            )
+            ) if not isinstance(data_dict["hiddenstate"], str) else None
             cell_state = tf.get_variable(
                 "cell_state",
                 shape=data_dict["cellstate"].shape,
                 initializer=tf.constant_initializer(data_dict["cellstate"]),
                 trainable=False
-            )
+            ) if not isinstance(data_dict["hiddenstate"], str) else None
             lstm = cls(cell, hid_state, cell_state)
         return lstm
+
+pass
+
+
+class BidirectionalRNN(Unit):
+
+    def __init__(self, forward_rnn, backward_rnn):
+        super().__init__()
+        self._forward_rnn = forward_rnn
+        self._backward_rnn = backward_rnn
+        self.register_subunit(self._forward_rnn)
+        self.register_subunit(self._backward_rnn)
+
+    @property
+    def forward_rnn(self):
+        return self._forward_rnn
+
+    @property
+    def backward_rnn(self):
+        return self._backward_rnn
+
+    def process(self, inputs, merge_outputs=True, scope=None, **kwargs):
+        with tf.variable_scope(scope, default_name="bidirectional_rnn_output"):
+            fwd_outputs = self.forward_rnn.process(inputs, include_state=False, **kwargs)
+            bwd_inputs = tf.reverse(inputs, axis=[1])
+            bwd_bwd_outputs = self.backward_rnn.process(bwd_inputs, include_state=False, **kwargs)
+            bwd_outputs = tf.reverse(bwd_bwd_outputs, axis=[1])
+            outputs = tf.concat([fwd_outputs, bwd_outputs], axis=-1) if merge_outputs else (fwd_outputs, bwd_outputs)
+        return outputs
+
+    def to_dictionary(self, session):
+        return {
+            "forward_rnn": {type(self.forward_rnn).__name__: self.forward_rnn.to_dictionary(session)},
+            "backward_rnn": {type(self.backward_rnn).__name__: self.backward_rnn.to_dictionary(session)}
+        }
+
+    @classmethod
+    def from_dictionary(cls, data_dict, scope=None):
+        fwd_rnn_type, fwd_rnn_dict = data_dict["forward_rnn"].popitem()
+        bwd_rnn_type, bwd_rnn_dict = data_dict["backward_rnn"].popitem()
+        with tf.variable_scope(scope, default_name="bidirectional_rnn"):
+            forward_rnn = eval(fwd_rnn_type).from_dictionary(fwd_rnn_dict)
+            backward_rnn = eval(bwd_rnn_type).from_dictionary(bwd_rnn_dict)
+        return cls(forward_rnn, backward_rnn)
 
 pass
