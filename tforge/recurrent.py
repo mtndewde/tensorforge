@@ -265,17 +265,29 @@ class BidirectionalRNN(Unit):
 
     def to_dictionary(self, session):
         return {
-            "forward_rnn": {type(self.forward_rnn).__name__: self.forward_rnn.to_dictionary(session)},
-            "backward_rnn": {type(self.backward_rnn).__name__: self.backward_rnn.to_dictionary(session)}
+            "forward_rnn": {
+                "type": type(self.forward_rnn).__name__,
+                "rnn": self.forward_rnn.to_dictionary(session)
+            },
+            "backward_rnn": {
+                "type": type(self.backward_rnn).__name__,
+                "rnn": self.backward_rnn.to_dictionary(session)
+            }
         }
 
     @classmethod
     def from_dictionary(cls, data_dict, scope=None):
-        fwd_rnn_type, fwd_rnn_dict = data_dict["forward_rnn"].popitem()
-        bwd_rnn_type, bwd_rnn_dict = data_dict["backward_rnn"].popitem()
+        fwd_rnn_dict = data_dict["forward_rnn"]
+        fwd_rnn_cls_string = fwd_rnn_dict["type"]
+        fwd_rnn_cls = Unit.class_by_name(fwd_rnn_cls_string)
+        fwd_rnn_data_dict = fwd_rnn_dict["rnn"]
+        bwd_rnn_dict = data_dict["backward_rnn"]
+        bwd_rnn_cls_string = bwd_rnn_dict["type"]
+        bwd_rnn_cls = Unit.class_by_name(bwd_rnn_cls_string)
+        bwd_rnn_data_dict = bwd_rnn_dict["rnn"]
         with tf.variable_scope(scope, default_name="bidirectional_rnn"):
-            forward_rnn = eval(fwd_rnn_type).from_dictionary(fwd_rnn_dict)
-            backward_rnn = eval(bwd_rnn_type).from_dictionary(bwd_rnn_dict)
+            forward_rnn = fwd_rnn_cls.from_dictionary(fwd_rnn_data_dict)
+            backward_rnn = bwd_rnn_cls.from_dictionary(bwd_rnn_data_dict)
         return cls(forward_rnn, backward_rnn)
 
 pass

@@ -1,8 +1,22 @@
 import tensorflow as tf
 import h5py
 
+class _UnitNameRegistringType(type):
 
-class Unit(object):
+    def __init__(cls, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if len(cls.mro()) > 2:
+            cls._classes_by_name[cls.__name__] = cls
+
+pass
+
+class Unit(object, metaclass=_UnitNameRegistringType):
+
+    _classes_by_name = {}
+
+    @staticmethod
+    def class_by_name(name):
+        return Unit._classes_by_name[name]
 
     def __init__(self):
         self._variables = []
@@ -87,7 +101,7 @@ pass
 
 class StackedUnits(Unit):
 
-    def __init__(self, units):
+    def __init__(self, units=[]):
         super().__init__()
         self._stacked_units = units
         for u in units:
@@ -97,13 +111,35 @@ class StackedUnits(Unit):
     def units(self):
         return self._stacked_units
 
+    def add(self, unit):
+        self._stacked_units.append(unit)
+
     def process(self, inputs):
         outputs = inputs
         for unit in self._stacked_units:
             outputs = unit.process(outputs)
         return outputs
 
-    
+    def to_dictionary(self, session):
+        return {
+            "stacked_unit_%i" % (i+1): {
+                "unit": unit.to_dictionary(session),
+                "type": type(unit).__name__
+            } for i, unit in enumerate(self.units)
+        }
+
+    @classmethod
+    def from_dictionary(cls, data_dict, scope=None):
+        stacked_units = []
+        with tf.variable_scope(scope, default_name="stacked_units"):
+            for i in range(len(data_dict)):
+                unit_dict = data_dict["stacked_unit_%i"%(i+1)]
+                unit_data_dict = unit_dict["unit"]
+                unit_cls_string = unit_dict["type"]
+                unit_cls = Unit.class_by_name(unit_cls_string)
+                unit = unit_cls.from_dictionary(unit_data_dict)
+                stacked_units.append(unit)
+        return cls(stacked_units)
 
 pass
 
@@ -123,6 +159,21 @@ class RecurrentUnit(Unit):
         with tf.variable_scope(scope, default_name="rnn_output"):
             outputs, state = tf.nn.dynamic_rnn(self.cell, inputs, initial_state=initial_state, scope=scope)
         return (outputs if not include_state else (outputs, state))
+
+    def to_dictionary(self, session):
+        return {
+            "cell": self.cell.to_dictionary(session),
+            "type": type(self.cell).__name__
+        }
+
+    @classmethod
+    def from_dictionary(cls, data_dict, scope):
+        cell_cls_string = data_dict["type"]
+        cell_cls = Unit.class_by_name(cell_cls_string)
+        cell_data_dict = data_dict["cell"]
+        with tf.variable_scope(scope, default_name="recurrent_unit"):
+            cell =  cell_cls.from_dictionary(cell_data_dict)
+        return cls(cell)
 
 pass
 
