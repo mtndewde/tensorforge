@@ -65,7 +65,7 @@ class BasicRNN(StatefulUnit):
 
     @property
     def hidden_state(self):
-        return self.state[0]
+        return self.states[0]
 
     def to_dictionary(self, session):
         return {
@@ -202,11 +202,11 @@ class LSTM(StatefulUnit):
 
     @property
     def hidden_state(self):
-        return self.state[0]
+        return self.states[0]
 
     @property
     def cell_state(self):
-        return self.state[1]
+        return self.states[1]
 
     def to_dictionary(self, session):
         return {
