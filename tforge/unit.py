@@ -1,7 +1,7 @@
 import tensorflow as tf
 import h5py
 
-class _UnitNameRegistringType(type):
+class _NameRegistringType(type):
 
     def __init__(cls, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -10,7 +10,7 @@ class _UnitNameRegistringType(type):
 
 pass
 
-class Unit(object, metaclass=_UnitNameRegistringType):
+class Unit(object, metaclass=_NameRegistringType):
 
     _classes_by_name = {}
 
@@ -101,22 +101,23 @@ pass
 
 class StackedUnits(Unit):
 
-    def __init__(self, units=[]):
+    def __init__(self, units=None):
         super().__init__()
-        self._stacked_units = units
-        for u in units:
+        self._units = units if units is not None else []
+        for u in self._units:
             self.register_subunit(u)
 
     @property
     def units(self):
-        return self._stacked_units
+        return self._units
 
     def add(self, unit):
-        self._stacked_units.append(unit)
+        self._units.append(unit)
+        self.register_subunit(unit)
 
     def process(self, inputs):
         outputs = inputs
-        for unit in self._stacked_units:
+        for unit in self.units:
             outputs = unit.process(outputs)
         return outputs
 
@@ -180,28 +181,28 @@ pass
 
 class StatefulUnit(RecurrentUnit):
 
-    def __init__(self, cell, state_tuple=()):
+    def __init__(self, cell, state_tuple=None):
         super().__init__(cell)
-        self._state = state_tuple
-        for state in [s for s in state_tuple if s is not None]:
+        self._states = state_tuple if state_tuple is not None else ()
+        for state in [s for s in self._states if s is not None]:
             self.register_variable(state)
 
     @property
-    def state(self):
-        return self._state
+    def states(self):
+        return self._states
 
     def reset_state(self, scope=None):
         with tf.variable_scope(scope, default_name="statefulunit_reset"):
-            reset =[tf.assign(s, tf.zeros(s.get_shape())) for s in self.state if s is not None]
+            reset =[tf.assign(s, tf.zeros(s.get_shape())) for s in self.states if s is not None]
         return reset
 
     def process(self, inputs, save_state=True, include_state=False, scope=None):
         with tf.variable_scope(scope, default_name="statefulunit_output") as scope:
             initial_state = tuple([s if s is not None else tf.zeros([tf.shape(inputs)[0], d], tf.float32)
-                             for s, d in zip(list(self.state), list(self.cell.state_size))])
+                                   for s, d in zip(list(self.states), list(self.cell.state_size))])
             outputs, state = super().process(inputs, initial_state=initial_state, include_state=True, scope=scope)
             if save_state:
-                with tf.control_dependencies([tf.assign(s, ns) for s, ns in zip(self.state, state) if s is not None]):
+                with tf.control_dependencies([tf.assign(s, ns) for s, ns in zip(self.states, state) if s is not None]):
                     outputs = tf.identity(outputs)
         return (outputs if not include_state else (outputs, state))
 
