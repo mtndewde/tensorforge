@@ -98,7 +98,7 @@ class EmbeddingLayer(Unit):
             self.register_parameter(embeddings)
         else:
             self.register_variable(embeddings)
-        self._output_dim = self._embeddings.shape[-1]
+        self._output_dim = tf.shape(self._embeddings)[-1]
 
     @property
     def embeddings(self):
@@ -220,14 +220,16 @@ class TextEmbeddingLayer(Unit):
         with tf.variable_scope(scope, default_name="text_embedding_layer_output"):
             batch = len(inputs.shape) > 1
             if batch:
-                outputs_shape = inputs.get_shape().as_list() + [self.output_dim.value]
-                outputs_shape = [s if s is not None else -1 for s in outputs_shape]
+                #outputs_shape = inputs.get_shape().as_list() + [self.embedding_layer.output_dim.value]
+                #outputs_shape = [s if s is not None else -1 for s in outputs_shape]
+                outputs_shape = [*tf.unstack(tf.shape(inputs)), tf.shape(self.embedding_layer.embeddings)[-1]]
                 inputs = tf.reshape(inputs, [-1])
             hashes = self.string_hash_producer.process(inputs)
             indeces = self.index_map.process(hashes)
             outputs = self.embedding_layer.process(indeces)
             if batch:
                 outputs = tf.reshape(outputs, outputs_shape)
+                outputs.set_shape(outputs.get_shape().as_list()[:-1]+[self.embedding_layer.embeddings.shape[-1]])
         return outputs
 
     def to_dictionary(self, session):

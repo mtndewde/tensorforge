@@ -18,6 +18,7 @@ class GloveEmbeddingLayer(TextEmbeddingLayer):
                 validate_shape=False,
                 trainable=trainable
             )
+            glove_embeddings.set_shape([None, embedding_dim])
         return cls.from_embeddings(glove_vocabulary, glove_embeddings, trainable, scope)
 
 pass
